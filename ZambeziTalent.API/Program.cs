@@ -19,7 +19,7 @@ builder.Services.AddSwaggerGen(c =>
         Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
-    c.AddSecurityRequirement(_ => new OpenApiSecurityRequirementSS
+    c.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
     {
         {
             new OpenApiSecuritySchemeReference("Bearer"),
