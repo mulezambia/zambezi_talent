@@ -13,6 +13,7 @@
           "Microsoft.AspNetCore.OpenApi": "10.0.14",
           "Microsoft.EntityFrameworkCore.Design": "10.0.14",
           "Microsoft.EntityFrameworkCore.Sqlite": "10.0.14",
+          "Microsoft.OpenApi": "2.12.2",
           "Swashbuckle.AspNetCore": "10.3.1"
         },
         "runtime": {
