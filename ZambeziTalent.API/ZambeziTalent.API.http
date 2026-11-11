@@ -1,0 +1,6 @@
+@ZambeziTalent.API_HostAddress = http://localhost:5220
+
+GET {{ZambeziTalent.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
