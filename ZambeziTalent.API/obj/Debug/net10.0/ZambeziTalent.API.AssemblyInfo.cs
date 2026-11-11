@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ZambeziTalent.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+98d22e4d29b01fc0e45a257c0bd2e95a8960f42e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7c58b31f6ca39de953608949c90e01a0134356bf")]
 [assembly: System.Reflection.AssemblyProductAttribute("ZambeziTalent.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ZambeziTalent.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
