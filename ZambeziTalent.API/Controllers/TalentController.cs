@@ -24,25 +24,29 @@ public class TalentController : ControllerBase
     }
 
     [Authorize(Roles = "Talent")]
-    [HttpPut("me")]
-    public async Task<IActionResult> UpdateMe([FromBody] UpdateTalentDto dto)
-    {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!int.TryParse(userIdClaim, out var userId))
-            return Unauthorized("Invalid token");
+[HttpPut("me")]
+public async Task<IActionResult> UpdateMe([FromBody] UpdateTalentDto dto)
+{
+    // Try ALL possible claim names for the user id
+    var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+    ?? User.FindFirstValue("nameidentifier")
+    ?? User.FindFirstValue("sub")
+    ?? User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier");
 
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return NotFound("User not found");
+if (!int.TryParse(userIdClaim, out var userId))
+    return Unauthorized($"Invalid token - claim found: {userIdClaim ?? "null"}");
 
-        // Only update fields that were sent
-        if (dto.Sport != null) user.Sport = dto.Sport;
-        if (dto.Position != null) user.Position = dto.Position;
-        if (dto.Province != null) user.Province = dto.Province;
+    var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+   if (user == null) return NotFound($"User not found for id {userId}");
 
-        await _context.SaveChangesAsync();
+    if (dto.Sport != null) user.Sport = dto.Sport;
+    if (dto.Position != null) user.Position = dto.Position;
+    if (dto.Province != null) user.Province = dto.Province;
 
-        return Ok(new { user.Id, user.FullName, user.Email, user.Sport, user.Position, user.Province });
-    }
+    await _context.SaveChangesAsync();
+
+    return Ok(new { user.Id, user.FullName, user.Email, user.Sport, user.Position, user.Province });
+}
 }
 
 public class UpdateTalentDto
