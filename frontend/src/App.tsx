@@ -1,3 +1,4 @@
+import TalentProfileForm from './TalentProfileForm';
 import { useState, useEffect } from 'react'
 import './App.css'
 
@@ -177,6 +178,10 @@ export default function App() {
       )}
 
       <div className={`profile-card ${user.role === 'Scout' ? 'scout' : 'talent'}`}><div style={{textAlign:'center'}}><img className="avatar-img" src={getPhoto(user.id)} alt={user.fullName} /><label style={{display:'block', marginTop:8, background:'rgba(255,255,255,0.25)', padding:'6px 10px', borderRadius:20, fontSize:12, cursor:'pointer', fontWeight:700}}>📷 Change Photo<input type="file" accept="image/*" onChange={handlePhotoUpload} style={{display:'none'}} /></label></div><div className="profile-info"><h2>{user.fullName} {user.role === 'Scout' && (verifiedMap[(user.email||'').toLowerCase()] || user.isVerified ? <span style={{background:'#dcfce7', color:'#166534', fontSize:12, padding:'2px 8px', borderRadius:10}}>✅ Verified Scout</span> : <span style={{background:'#fef3c7', color:'#92400e', fontSize:12, padding:'2px 8px', borderRadius:10}}>⚠️ Unverified</span>)}</h2><p>{user.email} • {user.location || user.province || 'Zambia'}</p><span className="badge">{user.role === 'Scout' ? `🔎 Scout • ${shortlist.length} Shortlisted` : user.role === 'Admin' ? '👑 Admin' : `⚽ ${user.position || 'Talent'} • ${user.age || ''} yrs`}</span></div></div>
+
+      {user.role === 'Talent' && (
+  <TalentProfileForm onSaved={() => setRefreshKey(k => k + 1)} />
+)}
 
       {user.role === 'Talent' && (
         <div style={{background:'#FFF8E7', padding:16, borderRadius:16, marginBottom:16, boxShadow:'0 4px 12px rgba(0,0,0,0.08)', border:'1px solid #FDE68A'}}>
