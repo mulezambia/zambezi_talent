@@ -1,4 +1,5 @@
 import TalentProfileForm from './TalentProfileForm';
+import ScoutTrialDashboard from './ScoutTrialDashboard';
 import { useState, useEffect } from 'react'
 import './App.css'
 
@@ -12,6 +13,232 @@ const normalizeRequest = (r: any): ContactRequest => { const rawStatus = r?.stat
 const normalizeTrial = (t: any): TrialInvite => { const s = (t?.status ?? t?.Status ?? 'Pending'); return { id: t?.id ?? t?.Id ?? 0, scoutEmail: t?.scoutEmail ?? t?.ScoutEmail ?? '', scoutName: t?.scoutName ?? t?.ScoutName ?? '', talentEmail: t?.talentEmail ?? t?.TalentEmail ?? '', talentName: t?.talentName ?? t?.TalentName ?? '', trialDate: t?.trialDate ?? t?.TrialDate ?? '', trialTime: t?.trialTime ?? t?.TrialTime ?? '', location: t?.location ?? t?.Location ?? '', message: t?.message ?? t?.Message ?? '', status: s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(), createdAt: t?.createdAt ?? t?.CreatedAt ?? '' } };
 const toWhatsAppLink = (phone: string) => { if (!phone) return ''; let cleaned = phone.replace(/[^0-9+]/g, ''); if (cleaned.startsWith('+')) cleaned = cleaned.slice(1); else if (cleaned.startsWith('0')) cleaned = '260' + cleaned.slice(1); return `https://wa.me/${cleaned}` };
 const copyToClipboard = async (text: string) => { try { await navigator.clipboard.writeText(text); alert(`📋 Copied: ${text}`) } catch { alert(text) } };
+const readResponseBody = async (res: Response): Promise<any> => {
+  const raw = await res.text();
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return raw; }
+};
+
+function ContactRequestDialog({
+  talent,
+  phone,
+  message,
+  sending,
+  onPhoneChange,
+  onMessageChange,
+  onClose,
+  onSubmit,
+}: {
+  talent: Talent | null;
+  phone: string;
+  message: string;
+  sending: boolean;
+  onPhoneChange: (value: string) => void;
+  onMessageChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: any) => void;
+}) {
+  if (!talent) return null;
+
+  return (
+    <div
+      role="presentation"
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10000,
+        background: 'rgba(15, 23, 42, 0.65)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="contact-request-title"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={onSubmit}
+        style={{
+          width: '100%', maxWidth: 460, background: '#fff',
+          borderRadius: 18, padding: 22, boxShadow: '0 20px 50px rgba(0,0,0,.25)',
+          display: 'flex', flexDirection: 'column', gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <h2 id="contact-request-title" style={{ margin: 0, color: '#14532d' }}>📩 Contact {talent.fullName}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ border: 0, background: '#f1f5f9', borderRadius: 8, padding: '7px 11px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
+          Send a contact request to this talent. Your WhatsApp number is optional and will only be shown to the talent if they accept.
+        </p>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 700 }}>
+          WhatsApp number (optional)
+          <input
+            type="tel"
+            value={phone}
+            onChange={(event) => onPhoneChange(event.target.value)}
+            placeholder="e.g. 0977 123 456 or +260 977 123 456"
+            style={{ width: '100%', boxSizing: 'border-box', padding: 12, border: '1px solid #cbd5e1', borderRadius: 9, font: 'inherit', fontWeight: 400 }}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 700 }}>
+          Message
+          <textarea
+            value={message}
+            onChange={(event) => onMessageChange(event.target.value)}
+            rows={4}
+            maxLength={1000}
+            required
+            style={{ width: '100%', boxSizing: 'border-box', padding: 12, border: '1px solid #cbd5e1', borderRadius: 9, font: 'inherit', fontWeight: 400, resize: 'vertical' }}
+          />
+        </label>
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button type="button" onClick={onClose} disabled={sending} style={{ flex: 1, padding: 12, border: '1px solid #cbd5e1', borderRadius: 9, background: '#f8fafc', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+          <button type="submit" disabled={sending || !message.trim()} style={{ flex: 1, padding: 12, border: 0, borderRadius: 9, background: sending ? '#86a98d' : '#1a7a2e', color: '#fff', fontWeight: 700, cursor: sending ? 'wait' : 'pointer' }}>
+            {sending ? 'Sending...' : 'Send Request'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+function TrialInviteDialog({
+  talent,
+  date,
+  time,
+  location,
+  message,
+  minDate,
+  sending,
+  error,
+  onDateChange,
+  onTimeChange,
+  onLocationChange,
+  onMessageChange,
+  onClose,
+  onSubmit,
+}: {
+  talent: Talent | null;
+  date: string;
+  time: string;
+  location: string;
+  message: string;
+  minDate: string;
+  sending: boolean;
+  error: string;
+  onDateChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+  onLocationChange: (value: string) => void;
+  onMessageChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: any) => void;
+}) {
+  if (!talent) return null;
+
+  const fieldStyle = {
+    width: '100%', boxSizing: 'border-box' as const, padding: 12,
+    border: '1px solid #cbd5e1', borderRadius: 9, font: 'inherit',
+    fontWeight: 400, background: '#fff', color: '#0f172a',
+  };
+  const labelStyle = {
+    display: 'flex', flexDirection: 'column' as const, gap: 6,
+    fontSize: 13, fontWeight: 700, color: '#1e293b',
+  };
+
+  return (
+    <div
+      role="presentation"
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10001,
+        background: 'rgba(15, 23, 42, 0.68)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 16,
+        overflowY: 'auto',
+      }}
+    >
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="trial-invite-title"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={onSubmit}
+        style={{
+          width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto',
+          background: '#fff', borderRadius: 18, padding: 22,
+          boxShadow: '0 20px 50px rgba(0,0,0,.25)',
+          display: 'flex', flexDirection: 'column', gap: 13,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <h2 id="trial-invite-title" style={{ margin: 0, color: '#1d4ed8', fontSize: 21 }}>📅 Arrange a Trial</h2>
+          <button type="button" onClick={onClose} disabled={sending} aria-label="Close" style={{ border: 0, background: '#f1f5f9', borderRadius: 8, padding: '7px 11px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <p style={{ margin: 0, color: '#475569', fontSize: 13 }}>
+          You are inviting <b>{talent.fullName}</b>. Choose the trial date from the calendar and set the time and venue.
+        </p>
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 11, color: '#1e40af', fontSize: 12 }}>
+          A contact request must already have been accepted by this talent before the trial invitation can be sent. Trials on ZAMBEZI TALENT must be free.
+        </div>
+        <label style={labelStyle}>
+          Trial date
+          <input
+            type="date"
+            value={date}
+            min={minDate}
+            required
+            onChange={(event) => onDateChange(event.target.value)}
+            style={fieldStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Trial time
+          <input
+            type="time"
+            value={time}
+            required
+            onChange={(event) => onTimeChange(event.target.value)}
+            style={fieldStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Trial venue / location
+          <input
+            type="text"
+            value={location}
+            required
+            maxLength={200}
+            onChange={(event) => onLocationChange(event.target.value)}
+            placeholder="e.g. Heroes Stadium, Lusaka"
+            style={fieldStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Message to talent (optional)
+          <textarea
+            value={message}
+            rows={3}
+            maxLength={1000}
+            onChange={(event) => onMessageChange(event.target.value)}
+            placeholder="Add any useful instructions for the trial..."
+            style={{ ...fieldStyle, resize: 'vertical' as const }}
+          />
+        </label>
+        {error && <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 9, padding: 10, fontSize: 13 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
+          <button type="button" onClick={onClose} disabled={sending} style={{ flex: 1, padding: 12, border: '1px solid #cbd5e1', borderRadius: 9, background: '#f8fafc', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+          <button type="submit" disabled={sending || !date || !time || !location.trim()} style={{ flex: 1, padding: 12, border: 0, borderRadius: 9, background: sending ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sending ? 'wait' : 'pointer' }}>
+            {sending ? 'Sending invitation...' : 'Send Trial Invitation'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const getLocalDateString = () => {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
 const getPhoto = (id: string) => { const saved = localStorage.getItem(`photo-${id}`); if (saved) return saved; let hash = 0; for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) % 1000; return `https://i.pravatar.cc/150?img=${(hash % 70) + 1}` };
 const getVideo = (id: string) => localStorage.getItem(`video-${id}`) || ''
 const getYouTubeEmbed = (url: string) => { if (!url) return ''; let id = ''; if (url.includes('youtu.be/')) id = url.split('youtu.be/')[1].split('?')[0].split('&')[0]; else if (url.includes('v=')) id = url.split('v=')[1].split('&')[0]; else if (url.includes('/shorts/')) id = url.split('/shorts/')[1].split('?')[0].split('/')[0]; else if (url.includes('/embed/')) id = url.split('/embed/')[1].split('?')[0]; else return ''; return `https://www.youtube.com/embed/${id}` };
@@ -35,6 +262,7 @@ export default function App() {
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [view, setView] = useState<'all' | 'shortlist'>('all')
+  const [scoutSection, setScoutSection] = useState<'discover' | 'trials'>('discover')
   const [search, setSearch] = useState('')
   const [filterPos, setFilterPos] = useState('All')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -43,6 +271,17 @@ export default function App() {
   const [myClipUrls, setMyClipUrls] = useState<string[]>([])
   const [clipUrls, setClipUrls] = useState<Record<string, string[]>>({})
   const [form, setForm] = useState({ fullName: '', email: '', password: '', role: 'Talent', position: '', age: '', location: '' })
+  const [contactDialogTalent, setContactDialogTalent] = useState<Talent | null>(null)
+  const [contactPhone, setContactPhone] = useState('')
+  const [contactMessage, setContactMessage] = useState('')
+  const [sendingContact, setSendingContact] = useState(false)
+  const [trialDialogTalent, setTrialDialogTalent] = useState<Talent | null>(null)
+  const [trialDate, setTrialDate] = useState(getLocalDateString())
+  const [trialTime, setTrialTime] = useState('10:00')
+  const [trialLocation, setTrialLocation] = useState('')
+  const [trialMessage, setTrialMessage] = useState('')
+  const [sendingTrial, setSendingTrial] = useState(false)
+  const [trialError, setTrialError] = useState('')
 
   useEffect(() => { fetch(`${API}/api/users`).then(r => r.json()).then((data: any[]) => { const list = Array.isArray(data) ? data : []; const normalized = list.map(normalizeUser).filter(u => (u.role || '').toLowerCase() === 'talent').map(u => ({ id: u.id, fullName: u.fullName, email: u.email, position: u.position || '', age: u.age || 0, location: u.location || 'Zambia', province: u.province || '' })); setTalents(normalized); const vMap: Record<string, boolean> = {}; list.forEach((u: any) => { const em = (u?.email ?? u?.Email ?? '').toLowerCase(); if (em) vMap[em] = !!(u?.isVerified ?? u?.IsVerified ?? false) }); setVerifiedMap(vMap); setAllUsers(list.map(normalizeUser)) }).catch(() => {}) }, [user, refreshKey])
   useEffect(() => {
@@ -52,10 +291,93 @@ export default function App() {
   }, [user, refreshKey])
   useEffect(() => { talents.forEach(async (t) => { const urls = await getAllVideoBlobUrls(t.id); if (urls.length) setClipUrls(prev => ({ ...prev, [t.id]: urls })) }) }, [talents])
 
-  const handleAuth = async (e: any) => { e.preventDefault(); const url = mode === 'login' ? `${API}/api/auth/login` : `${API}/api/auth/register`; const body = mode === 'login' ? { email: form.email, password: form.password } : { fullName: form.fullName, email: form.email, password: form.password, role: form.role, position: form.position, age: Number(form.age) || 0, location: form.location, province: form.location }; const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const data = await res.json(); if (res.ok) { const loggedUser = normalizeUser(data.user || data); setUser(loggedUser); localStorage.setItem('zambezi-user', JSON.stringify(loggedUser)); if (data.token || data.Token) localStorage.setItem('zambezi-token', data.token || data.Token); if (mode === 'register') alert('Registered! Now login.') } else alert(data.message || data.title || 'Error') };
+  const handleAuth = async (e: any) => {
+    e.preventDefault();
+    const url = mode === 'login' ? `${API}/api/auth/login` : `${API}/api/auth/register`;
+    const body = mode === 'login'
+      ? { email: form.email, password: form.password }
+      : { fullName: form.fullName, email: form.email, password: form.password, role: form.role, position: form.position, age: Number(form.age) || 0, location: form.location, province: form.location };
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await readResponseBody(res);
+      const payload = data && typeof data === 'object' ? data : {};
+
+      if (res.ok) {
+        const loggedUser = normalizeUser(payload.user || payload);
+        setUser(loggedUser);
+        localStorage.setItem('zambezi-user', JSON.stringify(loggedUser));
+        if (payload.token || payload.Token) localStorage.setItem('zambezi-token', payload.token || payload.Token);
+        if (mode === 'register') alert('Registered! Now login.');
+      } else {
+        const message = typeof data === 'string' ? data : payload.message || payload.title || 'Unable to authenticate. Please check your details.';
+        alert(message);
+      }
+    } catch (error) {
+      console.error('Authentication request failed:', error);
+      alert('Could not reach ZAMBEZI TALENT. Check your internet connection and try again.');
+    }
+  };
   const handleLogout = () => { localStorage.removeItem('zambezi-user'); localStorage.removeItem('zambezi-token'); setUser(null) };
   const toggleShortlist = async (talentId: string) => { if (!user) return; const isIn = shortlist.includes(talentId); const res = await fetch(`${API}/api/shortlist`, { method: isIn ? 'DELETE' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scoutId: user.id, talentId }) }); if (res.ok) setShortlist(isIn ? shortlist.filter(id => id !== talentId) : [...shortlist, talentId]) };
-  const sendContactRequest = async (talent: Talent) => { if (!user) return; if (!user.email) { alert('Please logout and login again'); return }; const phone = prompt('Enter your WhatsApp number so the talent can reach you (optional, e.g 0977 123 456):', '') || ''; const res = await fetch(`${API}/api/contactrequests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scoutEmail: user.email, scoutName: user.fullName, scoutPhone: phone, talentEmail: talent.email, talentName: talent.fullName, message: `Hi ${talent.fullName}, I am a scout and I liked your profile.` }) }); if (res.ok) alert('📩 Contact request sent! Talent will accept or decline.'); else { const t = await res.text(); alert(t.toLowerCase().includes('already') ? 'Already requested - check status on card' : t) }; setRefreshKey(k => k + 1) };
+  const sendContactRequest = (talent: Talent) => {
+    if (!user) return;
+    if (user.role !== 'Scout') {
+      alert('Only Scout accounts can send contact requests to talents.');
+      return;
+    }
+    if (!user.email) {
+      alert('Please logout and login again so your account details can be refreshed.');
+      return;
+    }
+
+    setContactPhone('');
+    setContactMessage(`Hi ${talent.fullName}, I am a scout and I liked your profile.`);
+    setContactDialogTalent(talent);
+  };
+
+  const submitContactRequest = async (event: any) => {
+    event.preventDefault();
+    if (!user || !contactDialogTalent || sendingContact) return;
+
+    setSendingContact(true);
+    try {
+      const res = await fetch(`${API}/api/contactrequests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scoutEmail: user.email,
+          scoutName: user.fullName,
+          scoutPhone: contactPhone.trim(),
+          talentEmail: contactDialogTalent.email,
+          talentName: contactDialogTalent.fullName,
+          message: contactMessage.trim(),
+        }),
+      });
+      const data = await readResponseBody(res);
+
+      if (!res.ok) {
+        const message = typeof data === 'string' ? data : data?.message || data?.title || `Request failed (${res.status}).`;
+        alert(`Could not send contact request: ${message}`);
+        return;
+      }
+
+      alert('📩 Contact request sent! The talent can now accept or decline it.');
+      setContactDialogTalent(null);
+      setContactPhone('');
+      setContactMessage('');
+      setRefreshKey((key) => key + 1);
+    } catch (error) {
+      console.error('Contact request failed:', error);
+      alert('Could not reach the server. Please check your connection and try again.');
+    } finally {
+      setSendingContact(false);
+    }
+  };
   const respondRequest = async (id: number, status: string) => { await fetch(`${API}/api/contactrequests/${id}/respond`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(status) }); setRefreshKey(k => k + 1) };
   const getRequestForTalent = (talentEmail: string) => { const matches = mySentRequests.filter(r => (r.talentEmail || '').toLowerCase() === (talentEmail || '').toLowerCase()); if (!matches.length) return undefined; return matches.find(r => r.status === 'Pending') || matches[matches.length - 1] }
 
@@ -68,19 +390,71 @@ export default function App() {
     alert(isVerified ? '⚠️ Scout unverified' : '✅ Scout verified!')
   }
 
-  const sendTrialInvite = async (talent: Talent) => {
-    if (!user) return
-    const date = prompt('📅 Trial Date (e.g 2026-11-15):', '2026-11-15')
-    if (!date) return
-    const time = prompt('🕙 Trial Time (e.g 10:00):', '10:00')
-    if (!time) return
-    const location = prompt('📍 Trial Location (e.g Heroes Stadium, Lusaka):', 'Heroes Stadium, Lusaka')
-    if (!location) return
-    const message = prompt('💬 Message to talent (optional):', `Hi ${talent.fullName}, you are invited for a trial. Please bring boots & ID.`) || ''
-    const res = await fetch(`${API}/api/trialinvites`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scoutEmail: user.email, scoutName: user.fullName, talentEmail: talent.email, talentName: talent.fullName, trialDate: date, trialTime: time, location, message }) })
-    if (res.ok) alert('📅 Trial invite sent!')
-    else { const t = await res.text(); alert(t) }
-    setRefreshKey(k => k + 1)
+  const sendTrialInvite = (talent: Talent) => {
+    if (!user || user.role !== 'Scout') {
+      alert('Only Scout accounts can send trial invitations.');
+      return;
+    }
+    if (!user.email) {
+      alert('Please logout and login again so your account details can be refreshed.');
+      return;
+    }
+    setTrialDate(getLocalDateString());
+    setTrialTime('10:00');
+    setTrialLocation('');
+    setTrialMessage(`Hi ${talent.fullName}, you are invited for a trial. Please bring your boots and identification.`);
+    setTrialError('');
+    setTrialDialogTalent(talent);
+  };
+
+  const submitTrialInvite = async (event: any) => {
+    event.preventDefault();
+    if (!user || !trialDialogTalent || sendingTrial) return;
+
+    const minDate = getLocalDateString();
+    if (!trialDate || trialDate < minDate) {
+      setTrialError('Please choose today or a future date for the trial.');
+      return;
+    }
+    if (!trialTime || !trialLocation.trim()) {
+      setTrialError('Please enter the trial time and venue.');
+      return;
+    }
+
+    setSendingTrial(true);
+    setTrialError('');
+    try {
+      const res = await fetch(`${API}/api/trialinvites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scoutEmail: user.email,
+          scoutName: user.fullName,
+          talentEmail: trialDialogTalent.email,
+          talentName: trialDialogTalent.fullName,
+          trialDate,
+          trialTime,
+          location: trialLocation.trim(),
+          message: trialMessage.trim(),
+        }),
+      });
+      const data = await readResponseBody(res);
+      if (!res.ok) {
+        const detail = typeof data === 'string' ? data : data?.message || data?.title || `Request failed (${res.status}).`;
+        setTrialError(`Could not send trial invitation: ${detail}`);
+        return;
+      }
+
+      alert('📅 Trial invitation sent successfully! The talent can now accept or decline it.');
+      setTrialDialogTalent(null);
+      setTrialError('');
+      setRefreshKey((key) => key + 1);
+    } catch (error) {
+      console.error('Trial invitation failed:', error);
+      setTrialError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setSendingTrial(false);
+    }
   };
   const respondTrial = async (id: number, status: string) => {
     if (status === 'Accepted') {
@@ -145,6 +519,32 @@ export default function App() {
             </>
           )}
         </div>
+        <ContactRequestDialog
+          talent={contactDialogTalent}
+          phone={contactPhone}
+          message={contactMessage}
+          sending={sendingContact}
+          onPhoneChange={setContactPhone}
+          onMessageChange={setContactMessage}
+          onClose={() => setContactDialogTalent(null)}
+          onSubmit={submitContactRequest}
+        />
+        <TrialInviteDialog
+          talent={trialDialogTalent}
+          date={trialDate}
+          time={trialTime}
+          location={trialLocation}
+          message={trialMessage}
+          minDate={getLocalDateString()}
+          sending={sendingTrial}
+          error={trialError}
+          onDateChange={setTrialDate}
+          onTimeChange={setTrialTime}
+          onLocationChange={setTrialLocation}
+          onMessageChange={setTrialMessage}
+          onClose={() => { if (!sendingTrial) { setTrialDialogTalent(null); setTrialError(''); } }}
+          onSubmit={submitTrialInvite}
+        />
       </div>
     );
   }
@@ -211,29 +611,68 @@ export default function App() {
 
       {user.role === 'Talent' && (<div style={{background:'#FFF8E7', padding:16, borderRadius:16, marginBottom:16, boxShadow:'0 4px 12px rgba(0,0,0,0.08)', border:'1px solid #FDE68A'}}><h3 style={{margin:'0 0 8px'}}>🎥 My Highlights</h3><p style={{margin:'0 0 10px', color:'#666', fontSize:13}}>Upload real clips (max 100s each, up to 5)</p><label style={{display:'block', background: myClipUrls.length >= 5 ? '#999' : '#1a7a2e', color:'white', textAlign:'center', padding:'12px', borderRadius:10, fontWeight:700, cursor:'pointer'}}>{uploading ? '⏳ Saving...' : myClipUrls.length >= 5 ? '✅ You have 5/5 clips' : `📹 Upload Clip (${myClipUrls.length}/5)`}<input type="file" accept="video/*" onChange={handleClipUpload} style={{display:'none'}} disabled={myClipUrls.length >= 5} /></label>{myClipUrls.map((url, i) => (<div key={i} style={{position:'relative', marginTop:12}}><video style={{width:'100%', height:220, borderRadius:12, background:'black'}} src={url} controls playsInline /><button onClick={() => handleDeleteClip(i)} style={{position:'absolute', top:8, right:8, background:'red', color:'white', border:'none', borderRadius:20, padding:'6px 10px', cursor:'pointer', fontSize:12}}>🗑️ Delete Clip {i+1}</button></div>))}<p style={{margin:'16px 0 10px', color:'#666', fontSize:13}}>Or paste a YouTube link</p><div style={{display:'flex', gap:8}}><input style={{flex:1, padding:'10px 12px', borderRadius:10, border:'1px solid #FDE68A', background:'white'}} placeholder="https://youtube.com/watch?v=..." value={videoInput} onChange={e => setVideoInput(e.target.value)} /><button className="btn btn-primary" onClick={handleSaveVideo} style={{margin:0}}>Save Link</button></div>{myClipUrls.length === 0 && getVideo(user.id) && getYouTubeEmbed(getVideo(user.id)) && (<iframe style={{width:'100%', height:220, borderRadius:12, marginTop:12, border:'none'}} src={getYouTubeEmbed(getVideo(user.id))} allowFullScreen title="Highlights"></iframe>)}</div>)}
 
-      {user.role === 'Scout' && <div className="tabs"><button className={`btn btn-filter ${view === 'all' ? 'active' : 'inactive'}`} onClick={() => setView('all')}>All Talents</button><button className={`btn btn-filter ${view === 'shortlist' ? 'active' : 'inactive'}`} onClick={() => setView('shortlist')}>⭐ My Shortlist ({shortlist.length})</button></div>}
-      <div className="search-row"><input placeholder="🔍 Search player..." value={search} onChange={e => setSearch(e.target.value)} /><select value={filterPos} onChange={e => setFilterPos(e.target.value)}><option>All</option><option>Striker</option><option>Midfielder</option><option>Defender</option><option>Goalkeeper</option><option>Winger</option></select></div>
-      <h3 style={{margin:'0 0 14px'}}>Discover Talents ({filtered.length})</h3>
-      <div className="talent-grid">
-        {filtered.map(t => { const isShort = shortlist.includes(t.id); const clips = clipUrls[t.id] || []; const embed = getYouTubeEmbed(getVideo(t.id)); const req = getRequestForTalent(t.email); const trial = getTrialForTalent(t.email); return (
-          <div key={t.id} className={`talent-card ${isShort ? 'shortlisted' : ''}`} onClick={() => setSelectedTalent(t)} style={{ cursor: 'pointer', background: '#FFF8E7', border: '1px solid #FDE68A' }}>
-            <img className="avatar-small-img" src={getPhoto(t.id)} alt={t.fullName} /><h3>{t.fullName}</h3><p>{t.position}</p><div className="meta">📍 {t.location} • {t.age} yrs</div>
-            {clips.length ? clips.map((url, i) => (<video key={i} style={{width:'100%', height:160, borderRadius:10, margin:'10px 0', background:'black'}} src={url} controls playsInline />)) : embed ? <iframe style={{width:'100%', height:160, borderRadius:10, margin:'10px 0', border:'none'}} src={embed} allowFullScreen title={t.fullName}></iframe> : <p style={{fontSize:12, color:'#999', margin:'10px 0'}}>🎥 No highlights yet</p>}
-            {user.role === 'Scout' && (<>
-              <button className={`btn ${isShort ? 'btn-shortlisted' : 'btn-shortlist'}`} onClick={(e) => { e.stopPropagation(); toggleShortlist(t.id); }}>{isShort ? '⭐ Shortlisted - Tap to Remove' : '☆ Add to Shortlist'}</button>
-              {!req && <button className="btn btn-primary" style={{marginTop:8}} onClick={(e) => { e.stopPropagation(); sendContactRequest(t); }}>📩 Request to Contact</button>}
-              {req && req.status === 'Pending' && <button className="btn btn-secondary" style={{marginTop:8, opacity:0.7}} disabled>⏳ Requested — Waiting</button>}
-              {req && req.status === 'Accepted' && (<div style={{marginTop:8, background:'#dcfce7', padding:'12px', borderRadius:10, textAlign:'center'}} onClick={(e) => e.stopPropagation()}><b style={{fontSize:13}}>✅ Accepted — Contact {t.fullName}</b><div style={{fontSize:12, color:'#333', margin:'4px 0 8px'}}>{t.email}</div><div style={{display:'flex', gap:6}}><a href={`mailto:${t.email}?subject=Zambezi Talent - Trial / Interest&body=Hi ${t.fullName}, I saw your profile on Zambezi Talent and would like to talk.`} style={{flex:1, background:'#1a7a2e', color:'white', padding:'9px', borderRadius:8, fontWeight:700, fontSize:12, textDecoration:'none', textAlign:'center'}}>📧 Email</a><button onClick={() => copyToClipboard(t.email)} style={{flex:1, background:'white', border:'1px solid #ddd', padding:'9px', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer'}}>📋 Copy</button></div>
-                {!trial && <button onClick={() => sendTrialInvite(t)} style={{width:'100%', marginTop:8, background:'#2563eb', color:'white', border:'none', padding:'10px', borderRadius:8, fontWeight:700, cursor:'pointer'}}>📅 Send Trial Invite</button>}
-                {trial && trial.status === 'Pending' && <div style={{marginTop:8, background:'#fef3c7', padding:10, borderRadius:8, fontSize:12}}><b>⏳ Trial Pending</b><div>📅 {trial.trialDate} at {trial.trialTime}</div><div>📍 {trial.location}</div></div>}
-                {trial && trial.status === 'Accepted' && <div style={{marginTop:8, background:'#dcfce7', padding:10, borderRadius:8, fontSize:12, fontWeight:700}}>✅ Trial Accepted!<div>📅 {trial.trialDate} at {trial.trialTime}</div><div>📍 {trial.location}</div></div>}
-                {trial && trial.status === 'Declined' && <div style={{marginTop:8, background:'#fee2e2', padding:10, borderRadius:8, fontSize:12}}>❌ Trial Declined — <button onClick={() => sendTrialInvite(t)} style={{background:'none', border:'none', color:'#2563eb', fontWeight:700, cursor:'pointer', textDecoration:'underline'}}>Send Another?</button></div>}
-              </div>)}
-              {req && req.status === 'Declined' && <div style={{marginTop:8, background:'#fee2e2', padding:'10px', borderRadius:10, fontSize:13, textAlign:'center'}}>❌ Declined by Talent</div>}
-            </>)}
-          </div>)})}
-      </div>
-      {filtered.length === 0 && <p style={{textAlign:'center', color:'#aaa', marginTop:30}}>No players found.</p>}
+      {user.role === 'Scout' && (
+        <div className="tabs zt-scout-tabs">
+          <button className={`btn btn-filter ${scoutSection === 'discover' && view === 'all' ? 'active' : 'inactive'}`} onClick={() => { setScoutSection('discover'); setView('all'); }}>⚽ All Talents</button>
+          <button className={`btn btn-filter ${scoutSection === 'discover' && view === 'shortlist' ? 'active' : 'inactive'}`} onClick={() => { setScoutSection('discover'); setView('shortlist'); }}>⭐ My Shortlist ({shortlist.length})</button>
+          <button className={`btn btn-filter ${scoutSection === 'trials' ? 'active' : 'inactive'}`} onClick={() => setScoutSection('trials')}>📅 My Trials {mySentTrials.filter(t => t.status === 'Pending').length > 0 ? `(${mySentTrials.filter(t => t.status === 'Pending').length} pending)` : ''}</button>
+        </div>
+      )}
+
+      {user.role === 'Scout' && scoutSection === 'trials' ? (
+        <ScoutTrialDashboard invites={mySentTrials} onRefresh={() => setRefreshKey(key => key + 1)} />
+      ) : (
+        <>
+          <div className="search-row"><input placeholder="🔍 Search player..." value={search} onChange={e => setSearch(e.target.value)} /><select value={filterPos} onChange={e => setFilterPos(e.target.value)}><option>All</option><option>Striker</option><option>Midfielder</option><option>Defender</option><option>Goalkeeper</option><option>Winger</option></select></div>
+          <h3 style={{margin:'0 0 14px'}}>Discover Talents ({filtered.length})</h3>
+          <div className="talent-grid">
+            {filtered.map(t => { const isShort = shortlist.includes(t.id); const clips = clipUrls[t.id] || []; const embed = getYouTubeEmbed(getVideo(t.id)); const req = getRequestForTalent(t.email); const trial = getTrialForTalent(t.email); return (
+              <div key={t.id} className={`talent-card ${isShort ? 'shortlisted' : ''}`} onClick={() => setSelectedTalent(t)} style={{ cursor: 'pointer', background: '#FFF8E7', border: '1px solid #FDE68A' }}>
+                <img className="avatar-small-img" src={getPhoto(t.id)} alt={t.fullName} /><h3>{t.fullName}</h3><p>{t.position}</p><div className="meta">📍 {t.location} • {t.age} yrs</div>
+                {clips.length ? clips.map((url, i) => (<video key={i} style={{width:'100%', height:160, borderRadius:10, margin:'10px 0', background:'black'}} src={url} controls playsInline />)) : embed ? <iframe style={{width:'100%', height:160, borderRadius:10, margin:'10px 0', border:'none'}} src={embed} allowFullScreen title={t.fullName}></iframe> : <p style={{fontSize:12, color:'#999', margin:'10px 0'}}>🎥 No highlights yet</p>}
+                {user.role === 'Scout' && (<>
+                  <button className={`btn ${isShort ? 'btn-shortlisted' : 'btn-shortlist'}`} onClick={(e) => { e.stopPropagation(); toggleShortlist(t.id); }}>{isShort ? '⭐ Shortlisted - Tap to Remove' : '☆ Add to Shortlist'}</button>
+                  {!req && <button className="btn btn-primary" style={{marginTop:8}} onClick={(e) => { e.stopPropagation(); sendContactRequest(t); }}>📩 Request to Contact</button>}
+                  {req && req.status === 'Pending' && <button className="btn btn-secondary" style={{marginTop:8, opacity:0.7}} disabled>⏳ Requested — Waiting</button>}
+                  {req && req.status === 'Accepted' && (<div style={{marginTop:8, background:'#dcfce7', padding:'12px', borderRadius:10, textAlign:'center'}} onClick={(e) => e.stopPropagation()}><b style={{fontSize:13}}>✅ Accepted — Contact {t.fullName}</b><div style={{fontSize:12, color:'#333', margin:'4px 0 8px'}}>{t.email}</div><div style={{display:'flex', gap:6}}><a href={`mailto:${t.email}?subject=Zambezi Talent - Trial / Interest&body=Hi ${t.fullName}, I saw your profile on Zambezi Talent and would like to talk.`} style={{flex:1, background:'#1a7a2e', color:'white', padding:'9px', borderRadius:8, fontWeight:700, fontSize:12, textDecoration:'none', textAlign:'center'}}>📧 Email</a><button onClick={() => copyToClipboard(t.email)} style={{flex:1, background:'white', border:'1px solid #ddd', padding:'9px', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer'}}>📋 Copy</button></div>
+                    {!trial && <button onClick={() => sendTrialInvite(t)} style={{width:'100%', marginTop:8, background:'#2563eb', color:'white', border:'none', padding:'10px', borderRadius:8, fontWeight:700, cursor:'pointer'}}>📅 Send Trial Invite</button>}
+                    {trial && trial.status === 'Pending' && <div style={{marginTop:8, background:'#fef3c7', padding:10, borderRadius:8, fontSize:12}}><b>⏳ Trial Pending</b><div>📅 {trial.trialDate} at {trial.trialTime}</div><div>📍 {trial.location}</div></div>}
+                    {trial && trial.status === 'Accepted' && <div style={{marginTop:8, background:'#dcfce7', padding:10, borderRadius:8, fontSize:12, fontWeight:700}}>✅ Trial Accepted!<div>📅 {trial.trialDate} at {trial.trialTime}</div><div>📍 {trial.location}</div></div>}
+                    {trial && trial.status === 'Declined' && <div style={{marginTop:8, background:'#fee2e2', padding:10, borderRadius:8, fontSize:12}}>❌ Trial Declined — <button onClick={() => sendTrialInvite(t)} style={{background:'none', border:'none', color:'#2563eb', fontWeight:700, cursor:'pointer', textDecoration:'underline'}}>Send Another?</button></div>}
+                  </div>)}
+                  {req && req.status === 'Declined' && <div style={{marginTop:8, background:'#fee2e2', padding:'10px', borderRadius:10, fontSize:13, textAlign:'center'}}>❌ Declined by Talent</div>}
+                </>)}
+              </div>)})}
+          </div>
+          {filtered.length === 0 && <p style={{textAlign:'center', color:'#aaa', marginTop:30}}>No players found.</p>}
+        </>
+      )}
+      <ContactRequestDialog
+        talent={contactDialogTalent}
+        phone={contactPhone}
+        message={contactMessage}
+        sending={sendingContact}
+        onPhoneChange={setContactPhone}
+        onMessageChange={setContactMessage}
+        onClose={() => setContactDialogTalent(null)}
+        onSubmit={submitContactRequest}
+      />
+      <TrialInviteDialog
+        talent={trialDialogTalent}
+        date={trialDate}
+        time={trialTime}
+        location={trialLocation}
+        message={trialMessage}
+        minDate={getLocalDateString()}
+        sending={sendingTrial}
+        error={trialError}
+        onDateChange={setTrialDate}
+        onTimeChange={setTrialTime}
+        onLocationChange={setTrialLocation}
+        onMessageChange={setTrialMessage}
+        onClose={() => { if (!sendingTrial) { setTrialDialogTalent(null); setTrialError(''); } }}
+        onSubmit={submitTrialInvite}
+      />
     </div>
   )
 }

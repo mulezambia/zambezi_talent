@@ -10,6 +10,8 @@ public class User
     public string? Sport { get; set; }
     public string? Position { get; set; }
     public string? Province { get; set; }
+    public int? Age { get; set; }
+    public string? Height { get; set; }
     public string? Bio { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsVerified { get; set; } = false;
