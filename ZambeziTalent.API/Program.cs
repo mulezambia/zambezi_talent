@@ -32,10 +32,15 @@ builder.Services.AddDbContext<AppDbContext>(opt => opt.UseSqlite("Data Source=za
 
 builder.Services.AddCors(opt => opt.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
-// FIX: Fallback key so Render doesn't crash if Jwt:Key env is missing
-var jwtKey = builder.Configuration["Jwt:Key"] 
-    ?? builder.Configuration["Jwt__Key"]
-    ?? "ZambeziTalent-Super-Secret-Dev-Key-1234567890-Change-Me-In-Production";
+// Require a securely configured JWT signing key.
+var jwtKey = builder.Configuration["Jwt:Key"];
+
+if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 64)
+{
+    throw new InvalidOperationException(
+        "JWT signing key is missing or too short. Configure Jwt:Key using User Secrets or an environment variable."
+    );
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt => {
